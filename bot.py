@@ -83,7 +83,7 @@ def send_log(message):
 # === FLASK SERVER ===
 @app.route('/')
 def index():
-    return "NOVAXA bot is running."
+    return "OK", 200
 
 # === ΕΝΑΡΞΗ BOT ===
 def run_bot():
