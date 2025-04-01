@@ -1,98 +1,42 @@
-import telebot
-import time
-import logging
-from flask import Flask
-import threading
-import os
+import telebot from flask import Flask import time import logging import threading
 
-# ===== CONFIGURATION =====
-BOT_TOKEN = os.environ.get("TOKEN")  # Από το Render Dashboard (Environment Variables)
-bot = telebot.TeleBot(BOT_TOKEN)
-app = Flask(__name__)
+API_TOKEN = '7658672268:AAHjzU-RICSnT44JKOJyAW1YPhrglUZBTHk' bot = telebot.TeleBot(API_TOKEN)
 
-# ===== LOGGING =====
-logging.basicConfig(filename="bot.log", level=logging.INFO, format="%(asctime)s - %(message)s")
+Rate limit dictionary
 
-# ===== RATE LIMIT =====
-user_last_message_time = {}
-rate_limit_seconds = 3  # Όριο ανά χρήστη (σε δευτερόλεπτα)
+user_last_message = {} rate_limit_seconds = 5
 
-def is_rate_limited(user_id):
-    current_time = time.time()
-    if user_id in user_last_message_time:
-        if current_time - user_last_message_time[user_id] < rate_limit_seconds:
-            return True
-    user_last_message_time[user_id] = current_time
-    return False
+Logging setup
 
-# ===== BASIC COMMANDS =====
-@bot.message_handler(commands=['start'])
-def start(message):
-    if is_rate_limited(message.from_user.id):
-        return
-    bot.reply_to(message, "Καλώς ήρθες στο NOVAXA Bot! Στείλε /help για οδηγίες.")
+logging.basicConfig(filename='bot_log.txt', level=logging.INFO, format='%(asctime)s - %(message)s')
 
-@bot.message_handler(commands=['help'])
-def help_command(message):
-    if is_rate_limited(message.from_user.id):
-        return
-    help_text = (
-        "Διαθέσιμες εντολές:\n"
-        "/start - Έναρξη\n"
-        "/help - Οδηγίες\n"
-        "/status - Έλεγχος κατάστασης\n"
-        "/getid - Λήψη Telegram ID\n"
-        "/notify <μήνυμα> - Αποστολή ειδοποίησης στον εαυτό σου\n"
-        "/alert <μήνυμα> - Alert με ping\n"
-    )
-    bot.reply_to(message, help_text)
+def rate_limited(message): user_id = message.from_user.id now = time.time() if user_id in user_last_message and now - user_last_message[user_id] < rate_limit_seconds: return True user_last_message[user_id] = now return False
 
-@bot.message_handler(commands=['status'])
-def status(message):
-    if is_rate_limited(message.from_user.id):
-        return
-    bot.reply_to(message, "Το NOVAXA bot λειτουργεί κανονικά!")
+@bot.message_handler(commands=['start']) def send_welcome(message): if rate_limited(message): return bot.reply_to(message, "Καλώς ήρθες στο NOVAXA bot!")
 
-@bot.message_handler(commands=['getid'])
-def getid(message):
-    if is_rate_limited(message.from_user.id):
-        return
-    user_id = message.from_user.id
-    bot.reply_to(message, f"Το Telegram ID σου είναι: {user_id}")
+@bot.message_handler(commands=['help']) def help_message(message): if rate_limited(message): return bot.reply_to(message, "/start - Έναρξη bot\n/help - Βοήθεια\n/status - Έλεγχος κατάστασης\n/getid - Το ID σου\n/notify - Μήνυμα μόνο σε εσένα\n/broadcast - Μαζικό μήνυμα\n/alert - Συναγερμός\n/log - Τελευταία logs")
 
-@bot.message_handler(commands=['notify'])
-def notify(message):
-    if is_rate_limited(message.from_user.id):
-        return
-    text = message.text.split(maxsplit=1)
-    if len(text) < 2:
-        bot.reply_to(message, "Χρήση: /notify <μήνυμα>")
-    else:
-        bot.send_message(message.chat.id, f"Ειδοποίηση: {text[1]}")
+@bot.message_handler(commands=['status']) def status(message): if rate_limited(message): return bot.reply_to(message, "Το bot είναι ενεργό και λειτουργεί σωστά.")
 
-@bot.message_handler(commands=['alert'])
-def alert(message):
-    if is_rate_limited(message.from_user.id):
-        return
-    text = message.text.split(maxsplit=1)
-    if len(text) < 2:
-        bot.reply_to(message, "Χρήση: /alert <μήνυμα>")
-    else:
-        bot.send_message(message.chat.id, f"🔔 ALERT: {text[1]}")
+@bot.message_handler(commands=['getid']) def get_user_id(message): if rate_limited(message): return bot.reply_to(message, f"Το ID σου είναι: {message.from_user.id}")
 
-# ===== FLASK ROUTE (αν χρειαστεί στο μέλλον για webhook) =====
-@app.route('/')
-def index():
-    return "NOVAXA bot is running!"
+@bot.message_handler(commands=['notify']) def notify(message): if rate_limited(message): return text = message.text.split(' ', 1) if len(text) > 1: bot.send_message(message.chat.id, text[1]) else: bot.reply_to(message, "Χρησιμοποίησε: /notify [μήνυμα]")
 
-# ===== BOT THREAD =====
-def run_bot():
-    try:
-        bot.polling(non_stop=True, interval=0)
-    except Exception as e:
-        logging.error(f"Bot crashed: {e}")
+@bot.message_handler(commands=['broadcast']) def broadcast(message): if rate_limited(message): return if message.from_user.id != 6156148301: bot.reply_to(message, "Δεν έχεις άδεια για αυτήν την εντολή.") return text = message.text.split(' ', 1) if len(text) < 2: bot.reply_to(message, "Χρήση: /broadcast [μήνυμα]") return with open('users.txt', 'r') as f: for line in f: try: bot.send_message(int(line.strip()), text[1]) except: continue
 
-# ===== START =====
-if __name__ == "__main__":
-    threading.Thread(target=run_bot).start()
-    app.run(host="0.0.0.0", port=10000)
+@bot.message_handler(commands=['alert']) def alert(message): if rate_limited(message): return bot.send_message(message.chat.id, "** ALERT ** - Έκτακτη ειδοποίηση!")
+
+@bot.message_handler(commands=['log']) def send_log(message): if rate_limited(message): return try: with open("bot_log.txt", "r") as f: lines = f.readlines()[-10:] bot.reply_to(message, ''.join(lines)) except: bot.reply_to(message, "Δεν βρέθηκε αρχείο log.")
+
+@bot.message_handler(func=lambda message: True) def echo_all(message): if rate_limited(message): return logging.info(f"{message.from_user.id}: {message.text}") with open("users.txt", "a") as f: f.write(f"{message.chat.id}\n")
+
+Flask setup
+
+app = Flask(name)
+
+@app.route('/') def index(): return 'NOVAXA bot is running!'
+
+def run_polling(): time.sleep(5) try: bot.delete_webhook() except: pass bot.infinity_polling()
+
+if name == 'main': threading.Thread(target=run_polling).start() app.run(host='0.0.0.0', port=10000)
+
