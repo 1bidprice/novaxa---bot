@@ -1,78 +1,39 @@
-"""
-Enhanced NOVAXA Telegram Bot
-A professional bot for stock alerts, project monitoring, and automated notifications
-"""
-
-import logging
-from datetime import datetime
-from flask import Flask
 import telebot
+import requests
+import logging
 
-# Logging configuration
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO,
-    filename="novaxa_bot.log"
-)
-logger = logging.getLogger(__name__)
-
-# Telegram Bot Token (προσυμφωνημένα εδώ, όχι σε .env)
-TOKEN = "7658672268:AAEHvAKeT9LT5jhkwL2ygMpt1SMzztnSZOM"
-
-# Flask app (για Webhook αν χρειαστεί)
-app = Flask(__name__)
-
-# Init bot
+# Ρύθμιση TOKEN (αντικατέστησέ το με το δικό σου)
+TOKEN = '7658672268:AAEHvAKeT9LT5jhkwL2ygMpt1SMzztnSZOM'
 bot = telebot.TeleBot(TOKEN)
 
-# Dummy project data
-projects = {
-    "bidprice": {
-        "name": "BidPrice",
-        "status": "Active",
-        "last_update": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "description": "Πλατφόρμα δημοπρασιών προϊόντων",
-        "metrics": {
-            "active_listings": 24,
-            "new_bids": 12,
-            "progress": 75
-        }
-    },
-    "amesis": {
-        "name": "Amesis",
-        "status": "In Development",
-        "last_update": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "description": "Σύστημα στιγμιαίων pop-up μηνυμάτων",
-        "metrics": {
-            "messages_sent": 156,
-            "receivers": 42,
-            "progress": 60
-        }
-    }
-}
+# Logging setup
+logging.basicConfig(level=logging.INFO)
 
-# /start command
+# Εντολές bot
 @bot.message_handler(commands=['start'])
-def start(message):
+def send_welcome(message):
     bot.reply_to(message, "Καλώς ήρθες στο NOVAXA v2.0")
 
-# /status command
 @bot.message_handler(commands=['status'])
 def status(message):
-    msg = "Κατάσταση έργων:\n"
-    for key, project in projects.items():
-        msg += f"\n{project['name']} ({project['status']}) - Πρόοδος: {project['metrics']['progress']}%"
-    bot.send_message(message.chat.id, msg)
+    bot.reply_to(message, "Το NOVAXA bot λειτουργεί κανονικά.\n\nΚατάσταση έργων:\n\nBidPrice (Active) - Πρόοδος: 75%\nAmesis (In Development) - Πρόοδος: 60%")
 
-# Bot polling
-if __name__ == "__main__":
-    logger.info("Ξεκινάει το NOVAXA bot...")
+@bot.message_handler(commands=['help'])
+def help_command(message):
+    bot.reply_to(message, "Διαθέσιμες εντολές:\n/start\n/status\n/help\n/getid")
 
-    # Διαγραφή webhook (για αποφυγή conflict 409)
+@bot.message_handler(commands=['getid'])
+def get_id(message):
+    bot.reply_to(message, f"Το Telegram ID σου είναι: {message.chat.id}")
+
+# Κύρια εκκίνηση
+if __name__ == '__main__':
+    # Διαγραφή υπάρχοντος webhook για αποφυγή σφάλματος 409
     try:
-        import requests
         requests.get(f"https://api.telegram.org/bot{TOKEN}/deleteWebhook")
+        logging.info("Webhook deleted successfully.")
     except Exception as e:
-        logger.warning(f"Δεν διαγράφηκε webhook: {e}")
+        logging.warning(f"Failed to delete webhook: {e}")
 
-    bot.polling(none_stop=True)
+    # Εκκίνηση bot με polling
+    bot.polling(non_stop=True, long_polling_timeout=30)
