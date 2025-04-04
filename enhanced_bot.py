@@ -2,35 +2,43 @@ import os
 import telebot
 from flask import Flask, request
 
-# Telegram Bot Token
+# === Ρυθμίσεις ===
 BOT_TOKEN = "7658672268:AAEHvAKeT9LT5jhkwL2ygMpt1SMzztnSZOM"
+WEBHOOK_URL = f"https://novaxa.onrender.com/{BOT_TOKEN}"
+LOG_FILE = "log.txt"
+
+# === Bot & Flask ===
 bot = telebot.TeleBot(BOT_TOKEN)
-
-# Δημιουργία log.txt αν δεν υπάρχει
-if not os.path.exists("log.txt"):
-    with open("log.txt", "w", encoding="utf-8") as f:
-        f.write("=== NOVAXA LOG START ===\n")
-
-# Flask App για webhook
 app = Flask(__name__)
 
+# === Logging ===
+def log(entry):
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(f"{entry}\n")
+
+if not os.path.exists(LOG_FILE):
+    with open(LOG_FILE, "w", encoding="utf-8") as f:
+        f.write("=== NOVAXA LOG START ===\n")
+
+# === Routes ===
 @app.route('/', methods=['GET'])
-def index():
-    return "NOVAXA v2.0 is running!"
+def home():
+    return 'NOVAXA v2.0 is running!'
 
 @app.route(f'/{BOT_TOKEN}', methods=['POST'])
-def receive_update():
-    json_str = request.get_data().decode('utf-8')
-    update = telebot.types.Update.de_json(json_str)
-    bot.process_new_updates([update])
+def webhook():
+    try:
+        update = telebot.types.Update.de_json(request.data.decode('utf-8'))
+        bot.process_new_updates([update])
+    except Exception as e:
+        log(f"Webhook error: {e}")
     return '', 200
 
-# Εντολές Telegram
+# === Commands ===
 @bot.message_handler(commands=['start'])
 def start(message):
-    user = message.from_user.first_name
     bot.reply_to(message, "Καλωσήρθες στη NOVAXA v2.0!")
-    log(f"{user} used /start")
+    log(f"{message.from_user.first_name} used /start")
 
 @bot.message_handler(commands=['help'])
 def help_command(message):
@@ -45,39 +53,22 @@ def status(message):
 @bot.message_handler(commands=['log'])
 def show_log(message):
     try:
-        with open("log.txt", "r", encoding="utf-8") as f:
+        with open(LOG_FILE, "r", encoding="utf-8") as f:
             content = f.read()
-        if len(content) > 4000:
-            content = content[-4000:]
-        bot.reply_to(message, f"Log αρχείο:\n\n{content}")
+        bot.reply_to(message, content[-4000:] if len(content) > 4000 else content)
         log(f"{message.from_user.first_name} used /log")
     except Exception as e:
-        bot.reply_to(message, "Σφάλμα κατά την ανάγνωση του log.")
-        log(f"ERROR reading log: {e}")
+        bot.reply_to(message, "Σφάλμα ανάγνωσης log.")
+        log(f"Log read error: {e}")
 
-# Συνάρτηση καταγραφής
-def log(entry):
-    with open("log.txt", "a", encoding="utf-8") as f:
-        f.write(f"{entry}\n")
-
-# Εκκίνηση εφαρμογής Flask και webhook
+# === Εκκίνηση ===
 if __name__ == '__main__':
     import telebot.apihelper
-
-    # Διαγραφή υπάρχοντος webhook
     try:
-        bot.delete_webhook()
-    except Exception as e:
-        print("Webhook deletion error:", e)
+        bot.remove_webhook()
+    except:
+        pass
 
-    # Ορισμός νέου webhook
-    WEBHOOK_URL = f"https://novaxa.onrender.com/{BOT_TOKEN}"
-    try:
-        bot.set_webhook(url=WEBHOOK_URL)
-        print(f"Webhook set to {WEBHOOK_URL}")
-    except Exception as e:
-        print("Webhook set error:", e)
-
-    # Εκκίνηση Flask App
+    bot.set_webhook(url=WEBHOOK_URL)
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port, use_reloader=False)
