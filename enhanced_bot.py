@@ -1,39 +1,53 @@
 import telebot
-import requests
 import logging
+import os
+from flask import Flask, request
 
-# Ρύθμιση TOKEN (αντικατέστησέ το με το δικό σου)
-TOKEN = '7658672268:AAEHvAKeT9LT5jhkwL2ygMpt1SMzztnSZOM'
+# Token από τα Environment Variables
+TOKEN = os.environ.get("TOKEN")
+
+# Δημιουργία bot
 bot = telebot.TeleBot(TOKEN)
 
-# Logging setup
+# Flask App
+app = Flask(__name__)
+
+# Logging για debugging
 logging.basicConfig(level=logging.INFO)
 
-# Εντολές bot
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    bot.reply_to(message, "Καλώς ήρθες στο NOVAXA v2.0")
+# === ROUTES ===
+@app.route('/', methods=['GET'])
+def index():
+    return 'NOVAXA v2.0 online'
 
-@bot.message_handler(commands=['status'])
-def status(message):
-    bot.reply_to(message, "Το NOVAXA bot λειτουργεί κανονικά.\n\nΚατάσταση έργων:\n\nBidPrice (Active) - Πρόοδος: 75%\nAmesis (In Development) - Πρόοδος: 60%")
+@app.route('/' + TOKEN, methods=['POST'])
+def receive_update():
+    json_str = request.get_data().decode('UTF-8')
+    update = telebot.types.Update.de_json(json_str)
+    bot.process_new_updates([update])
+    return 'OK', 200
+
+# === HANDLERS ===
+@bot.message_handler(commands=['start'])
+def start_cmd(message):
+    bot.reply_to(message, "Καλωσήρθες στη NOVAXA v2.0!")
 
 @bot.message_handler(commands=['help'])
-def help_command(message):
-    bot.reply_to(message, "Διαθέσιμες εντολές:\n/start\n/status\n/help\n/getid")
+def help_cmd(message):
+    bot.reply_to(message, "Διαθέσιμες εντολές:\n/start\n/help\n/status")
 
-@bot.message_handler(commands=['getid'])
-def get_id(message):
-    bot.reply_to(message, f"Το Telegram ID σου είναι: {message.chat.id}")
+@bot.message_handler(commands=['status'])
+def status_cmd(message):
+    bot.reply_to(message, "Η NOVAXA λειτουργεί κανονικά.")
 
-# Κύρια εκκίνηση
+# === MAIN ===
 if __name__ == '__main__':
-    # Διαγραφή υπάρχοντος webhook για αποφυγή σφάλματος 409
-    try:
-        requests.get(f"https://api.telegram.org/bot{TOKEN}/deleteWebhook")
-        logging.info("Webhook deleted successfully.")
-    except Exception as e:
-        logging.warning(f"Failed to delete webhook: {e}")
+    # Διαγραφή webhook πρώτα για να αποφευχθεί conflict
+    bot.remove_webhook()
 
-    # Εκκίνηση bot με polling
-    bot.polling(non_stop=True, long_polling_timeout=30)
+    # Ρύθμιση νέου webhook στη διεύθυνση Render
+    bot.set_webhook(url='https://novaxa.onrender.com/' + TOKEN)
+
+    # Εκκίνηση Flask με σωστό binding για Render
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
