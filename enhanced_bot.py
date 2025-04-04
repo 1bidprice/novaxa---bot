@@ -1,47 +1,30 @@
-import telebot
-from flask import Flask, request
-import os
-import logging
+import os import telebot from flask import Flask, request
 
-# === CONFIG ===
-TOKEN = "7658672268:AAEHvAKeT9LT5jhkwL2ygMpt1SMzztnSZOM"
-bot = telebot.TeleBot(TOKEN)
-app = Flask(__name__)
+API_TOKEN = '7658672268:AAEHvAKeT9LT5jhkwL2ygMpt1SMzztnSZOM' bot = telebot.TeleBot(API_TOKEN)
 
-# === LOGGING ===
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+app = Flask(name)
 
-# === ROUTES ===
-@app.route('/', methods=['GET'])
-def home():
-    return 'NOVAXA Bot is Live!', 200
+Handlers
 
-@app.route(f'/{TOKEN}', methods=['POST'])
-def receive_update():
-    json_str = request.get_data().decode('UTF-8')
-    update = telebot.types.Update.de_json(json_str)
-    bot.process_new_updates([update])
-    return '', 200
+@bot.message_handler(commands=['start']) def send_welcome(message): bot.reply_to(message, "Καλωσήρθες στη NOVAXA v2.0!")
 
-# === HANDLERS ===
-@bot.message_handler(commands=['start'])
-def handle_start(message):
-    bot.send_message(message.chat.id, "Καλωσήρθες στη NOVAXA v2.0!")
+@bot.message_handler(commands=['help']) def help_message(message): bot.reply_to(message, "Διαθέσιμες εντολές: /start /help /status /log /getid")
 
-@bot.message_handler(commands=['help'])
-def handle_help(message):
-    bot.send_message(message.chat.id, "Διαθέσιμες εντολές: /start, /help, /status, /getid")
+@bot.message_handler(commands=['status']) def status(message): bot.reply_to(message, "Η NOVAXA λειτουργεί κανονικά.")
 
-@bot.message_handler(commands=['status'])
-def handle_status(message):
-    bot.send_message(message.chat.id, "Η NOVAXA λειτουργεί κανονικά.")
+@bot.message_handler(commands=['getid']) def get_id(message): bot.reply_to(message, f"Το ID σου είναι: {message.chat.id}")
 
-@bot.message_handler(commands=['getid'])
-def handle_getid(message):
-    bot.send_message(message.chat.id, f"Το Telegram ID σου είναι: {message.chat.id}")
+@bot.message_handler(commands=['log']) def get_log(message): bot.reply_to(message, "[Λειτουργία log υπό κατασκευή]")
 
-# === MAIN ===
-if __name__ == "__main__":
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+Webhook route
+
+@app.route(f"/{API_TOKEN}", methods=['POST']) def receive_update(): json_str = request.get_data().decode("utf-8") update = telebot.types.Update.de_json(json_str) bot.process_new_updates([update]) return "", 200
+
+Root route
+
+@app.route("/") def index(): return "NOVAXA v2.0 is live!"
+
+Start app
+
+if name == "main": app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
