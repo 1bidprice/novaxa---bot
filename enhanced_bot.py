@@ -2,7 +2,7 @@ import os
 import telebot
 from flask import Flask, request
 
-# Telegram Bot Token (ενσωματωμένο απευθείας στον κώδικα)
+# Telegram Bot Token
 BOT_TOKEN = "7658672268:AAEHvAKeT9LT5jhkwL2ygMpt1SMzztnSZOM"
 bot = telebot.TeleBot(BOT_TOKEN)
 
@@ -60,12 +60,24 @@ def log(entry):
     with open("log.txt", "a", encoding="utf-8") as f:
         f.write(f"{entry}\n")
 
-# Εκκίνηση εφαρμογής Flask
+# Εκκίνηση εφαρμογής Flask και webhook
 if __name__ == '__main__':
     import telebot.apihelper
+
+    # Διαγραφή υπάρχοντος webhook
     try:
         bot.delete_webhook()
-    except Exception:
-        pass
+    except Exception as e:
+        print("Webhook deletion error:", e)
+
+    # Ορισμός νέου webhook
+    WEBHOOK_URL = f"https://novaxa.onrender.com/{BOT_TOKEN}"
+    try:
+        bot.set_webhook(url=WEBHOOK_URL)
+        print(f"Webhook set to {WEBHOOK_URL}")
+    except Exception as e:
+        print("Webhook set error:", e)
+
+    # Εκκίνηση Flask App
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
