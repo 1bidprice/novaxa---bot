@@ -1,41 +1,40 @@
 import telebot
 from flask import Flask, request
+import time
 import os
 
-API_TOKEN = '7658672268:AAEHvAKeT9LT5jhkwL2ygMpt1SMzztnSZOM'  # ΤΟ ΚΑΙΝΟΥΡΙΟ TOKEN
-bot = telebot.TeleBot(API_TOKEN)
+TOKEN = '7658672268:AAEHvAKeT9LT5jhkwL2ygMpt1SMzztnSZOM'
+bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
-# Webhook route
-@app.route('/setwebhook')
-def set_webhook():
-    webhook_url = f'https://novaxa.onrender.com/{API_TOKEN}'
-    if bot.remove_webhook():
-        bot.set_webhook(url=webhook_url)
-        return 'Webhook set successfully!'
-    return 'Failed to set webhook.'
+@app.route(f"/{TOKEN}", methods=['POST'])
+def receive_update():
+    json_str = request.get_data().decode('UTF-8')
+    update = telebot.types.Update.de_json(json_str)
+    bot.process_new_updates([update])
+    return "OK", 200
 
-# Webhook handler route
-@app.route(f'/{API_TOKEN}', methods=['POST'])
-def webhook():
-    if request.headers.get('content-type') == 'application/json':
-        json_string = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_string)
-        bot.process_new_updates([update])
-        return '', 200
-    return '', 403
+@app.route('/', methods=['GET'])
+def index():
+    return "NOVAXA bot is running.", 200
 
-# /start command
+# Βασικές εντολές bot
 @bot.message_handler(commands=['start'])
-def handle_start(message):
-    bot.send_message(message.chat.id, "Καλώς ήρθες στο BidPriceBot!")
+def start_cmd(message):
+    bot.reply_to(message, "Γεια σου! Το NOVAXA bot είναι ενεργό.")
 
-# /help command (προαιρετικά ενεργοποιημένο)
-@bot.message_handler(commands=['help'])
-def handle_help(message):
-    bot.send_message(message.chat.id, "Διαθέσιμες εντολές: /start, /help")
+@bot.message_handler(commands=['status'])
+def status_cmd(message):
+    bot.reply_to(message, "Το NOVAXA bot λειτουργεί κανονικά.")
 
-# Flask app binding
+# Εκκίνηση server + webhook
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    time.sleep(2)
+    try:
+        bot.remove_webhook()
+        bot.set_webhook(url=f"https://novaxa.onrender.com/{TOKEN}")
+        print("Webhook set successfully.")
+    except Exception as e:
+        print(f"Error setting webhook: {e}")
+    port = int(os.environ.get('PORT', 10000))
     app.run(host="0.0.0.0", port=port)
