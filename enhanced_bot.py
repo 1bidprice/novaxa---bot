@@ -1,50 +1,49 @@
 import telebot
-import logging
-import requests
-from flask import Flask
+from flask import Flask, request
+import os
 
-TOKEN = "7658672268:AAEHvAKeT9LT5jhkwL2ygMpt1SMzztnSZOM"
-bot = telebot.TeleBot(TOKEN)
+API_TOKEN = '7658672268:AAEHvAKeT9LT5jhkwL2ygMpt1SMzztnSZOM'
+
+bot = telebot.TeleBot(API_TOKEN)
 app = Flask(__name__)
 
-# LOGGING
-logging.basicConfig(level=logging.INFO)
+# ====== Telegram Commands ======
 
-# HANDLERS
 @bot.message_handler(commands=['start'])
-def handle_start(message):
-    bot.reply_to(message, "Καλωσήρθες στο NOVAXA bot!")
+def send_welcome(message):
+    bot.reply_to(message, "Καλώς ήρθες στο NOVAXA Bot!")
 
 @bot.message_handler(commands=['help'])
-def handle_help(message):
-    bot.reply_to(message, "Χρησιμοποίησε τις εντολές: /start, /status, /log")
+def send_help(message):
+    bot.reply_to(message, "Διαθέσιμες εντολές: /start /help /status")
 
 @bot.message_handler(commands=['status'])
-def handle_status(message):
-    bot.reply_to(message, "Το bot είναι ενεργό και λειτουργεί κανονικά.")
+def send_status(message):
+    bot.reply_to(message, "Το bot είναι ενεργό και λειτουργεί κανονικά!")
 
-# ROUTE για να ενεργοποιηθεί το webhook
+# ====== Webhook Endpoint ======
+
+@app.route(f'/{API_TOKEN}', methods=['POST'])
+def webhook():
+    json_string = request.get_data().decode('utf-8')
+    update = telebot.types.Update.de_json(json_string)
+    bot.process_new_updates([update])
+    return 'OK', 200
+
 @app.route('/setwebhook', methods=['GET'])
 def set_webhook():
-    webhook_url = f"https://novaxa.onrender.com/{TOKEN}"
-    response = requests.post(
-        f"https://api.telegram.org/bot{TOKEN}/setWebhook",
-        data={"url": webhook_url}
-    )
-    if response.status_code == 200:
+    webhook_url = f"https://novaxa.onrender.com/{API_TOKEN}"
+    if bot.set_webhook(url=webhook_url):
         return "Webhook set successfully!"
     else:
-        return f"Webhook failed: {response.text}"
+        return "Webhook setup failed!"
 
-# ROUTE για να δέχεται τα updates
-@app.route(f'/{TOKEN}', methods=['POST'])
-def receive_update():
-    try:
-        bot.process_new_updates([telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
-    except Exception as e:
-        logging.error(f"Error processing update: {e}")
-    return "OK"
+@app.route('/', methods=['GET'])
+def index():
+    return "NOVAXA bot is running!", 200
 
-# FLASK APP
+# ====== Gunicorn Entry Point ======
+
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=10000)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host="0.0.0.0", port=port)
