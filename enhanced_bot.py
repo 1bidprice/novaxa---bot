@@ -1,47 +1,50 @@
-import os
-import logging
-from flask import Flask, request
 import telebot
+import logging
+import requests
+from flask import Flask
 
-API_TOKEN = "7658672268:AAEHvAKeT9LT5jhkwL2ygMpt1SMzztnSZOM"
-bot = telebot.TeleBot(API_TOKEN)
+TOKEN = "7658672268:AAEHvAKeT9LT5jhkwL2ygMpt1SMzztnSZOM"
+bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
-# === Logging ===
-logging.basicConfig(
-    filename='log.txt',
-    level=logging.INFO,
-    format='%(asctime)s - %(message)s'
-)
+# LOGGING
+logging.basicConfig(level=logging.INFO)
 
-# === Set Webhook Route ===
-@app.route('/setwebhook')
-def set_webhook():
-    webhook_url = f"https://novaxa.onrender.com/{API_TOKEN}"
-    result = bot.set_webhook(url=webhook_url)
-    return "Webhook set: " + str(result)
-
-# === Webhook Receiver ===
-@app.route(f'/{API_TOKEN}', methods=['POST'])
-def webhook():
-    json_string = request.get_data().decode('utf-8')
-    update = telebot.types.Update.de_json(json_string)
-    bot.process_new_updates([update])
-    return "OK", 200
-
-# === Bot Commands ===
+# HANDLERS
 @bot.message_handler(commands=['start'])
 def handle_start(message):
-    bot.reply_to(message, "Γεια σου! Το bot είναι ενεργό.")
+    bot.reply_to(message, "Καλωσήρθες στο NOVAXA bot!")
 
 @bot.message_handler(commands=['help'])
 def handle_help(message):
-    bot.reply_to(message, "Διαθέσιμες εντολές: /start, /help, /status")
+    bot.reply_to(message, "Χρησιμοποίησε τις εντολές: /start, /status, /log")
 
 @bot.message_handler(commands=['status'])
 def handle_status(message):
-    bot.reply_to(message, "✅ Το bot λειτουργεί κανονικά.")
+    bot.reply_to(message, "Το bot είναι ενεργό και λειτουργεί κανονικά.")
 
-# === Flask App Entry Point ===
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+# ROUTE για να ενεργοποιηθεί το webhook
+@app.route('/setwebhook', methods=['GET'])
+def set_webhook():
+    webhook_url = f"https://novaxa.onrender.com/{TOKEN}"
+    response = requests.post(
+        f"https://api.telegram.org/bot{TOKEN}/setWebhook",
+        data={"url": webhook_url}
+    )
+    if response.status_code == 200:
+        return "Webhook set successfully!"
+    else:
+        return f"Webhook failed: {response.text}"
+
+# ROUTE για να δέχεται τα updates
+@app.route(f'/{TOKEN}', methods=['POST'])
+def receive_update():
+    try:
+        bot.process_new_updates([telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
+    except Exception as e:
+        logging.error(f"Error processing update: {e}")
+    return "OK"
+
+# FLASK APP
+if __name__ == '__main__':
+    app.run(host="0.0.0.0", port=10000)
