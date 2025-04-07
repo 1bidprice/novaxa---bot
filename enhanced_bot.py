@@ -251,16 +251,6 @@ def set_webhook():
         logger.error(f"Failed to set webhook: {e}")
         return f"Error setting webhook: {e}", 500
 
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    if request.headers.get('content-type') == 'application/json':
-        json_string = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_string)
-        bot.process_new_updates([update])
-        return '', 200
-    else:
-        return 'Invalid content type', 403
-
 def main():
     bot.remove_webhook()
     logger.info("Ξεκινάει polling...")
