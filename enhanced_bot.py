@@ -22,7 +22,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Bot token (consider moving to environment variable in production)
+# Bot token (embedded)
 TOKEN = "7658672268:AAEHvAKeT9LT5jhkwL2ygMpt1SMzztnSZOM"
 
 # Initialize Flask app for webhook
@@ -31,10 +31,10 @@ app = Flask(__name__)
 # Initialize Telegram bot
 bot = telebot.TeleBot(TOKEN)
 
-# Store user data (to track registered users and their info)
+# Store user data
 user_data = {}
 
-# Project status data (could be fetched from API in a real scenario)
+# Projects info
 projects = {
     "bidprice": {
         "name": "BidPrice",
@@ -74,40 +74,36 @@ projects = {
     }
 }
 
+# Συνέχεια με StockMonitor...
 # Stock monitoring functionality
 class StockMonitor:
     def __init__(self):
         self.stock_data = {}
-        # Default Greek stocks to monitor (with example threshold for alerts)
         self.default_stocks = {
             "OPAP.AT": {"name": "ΟΠΑΠ", "threshold": 18.50},
             "MYTIL.AT": {"name": "METLEN", "threshold": 42.44}
         }
-        
+
     def add_stock(self, symbol, name, threshold=None):
-        """Add a stock to monitor with optional price threshold for alerts"""
         self.default_stocks[symbol] = {"name": name, "threshold": threshold}
         logger.info(f"Added stock {name} ({symbol}) to monitoring list")
-        
+
     def remove_stock(self, symbol):
-        """Remove a stock from monitoring"""
         if symbol in self.default_stocks:
             stock_name = self.default_stocks[symbol]["name"]
             del self.default_stocks[symbol]
             logger.info(f"Removed stock {stock_name} ({symbol}) from monitoring list")
             return True
         return False
-        
+
     def set_alert_threshold(self, symbol, threshold):
-        """Set price threshold for alerts"""
         if symbol in self.default_stocks:
             self.default_stocks[symbol]["threshold"] = threshold
             logger.info(f"Set alert threshold for {symbol} to {threshold}")
             return True
         return False
-        
+
     def get_stock_data(self, symbol):
-        """Fetch current stock data from Yahoo Finance API"""
         try:
             url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
             params = {
@@ -126,15 +122,12 @@ class StockMonitor:
             }
             response = requests.get(url, params=params, headers=headers)
             data = response.json()
-            # Check if we have valid data
             if "chart" in data and "result" in data["chart"] and data["chart"]["result"]:
                 result = data["chart"]["result"][0]
                 meta = result["meta"]
-                # Get the latest price
                 latest_price = meta.get("regularMarketPrice", 0)
                 previous_close = meta.get("chartPreviousClose", 0)
                 currency = meta.get("currency", "EUR")
-                # Calculate price change
                 change = latest_price - previous_close
                 change_percent = (change / previous_close) * 100 if previous_close else 0
                 stock_info = {
@@ -147,7 +140,6 @@ class StockMonitor:
                     "currency": currency,
                     "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 }
-                # Update stored data
                 self.stock_data[symbol] = stock_info
                 return stock_info
             else:
@@ -156,12 +148,7 @@ class StockMonitor:
         except Exception as e:
             logger.error(f"Error fetching stock data for {symbol}: {str(e)}")
             return None
-        
-    def check_alerts(self, symbol=None):
-        """
-        Check if any stocks have crossed their alert thresholds.
-        Returns a list of alert messages (empty if no alerts).
-        """
+def check_alerts(self, symbol=None):
         alerts = []
         symbols_to_check = [symbol] if symbol else list(self.default_stocks.keys())
         for sym in symbols_to_check:
@@ -170,14 +157,11 @@ class StockMonitor:
             threshold = self.default_stocks[sym].get("threshold")
             if not threshold:
                 continue
-            # Get fresh data for the stock
             stock_info = self.get_stock_data(sym)
             if not stock_info:
                 continue
             current_price = stock_info["price"]
             stock_name = stock_info["name"]
-            # If current price crosses the threshold (above or below), trigger alert
-            # Here we trigger if within ±5% of threshold as an example condition
             if abs(current_price - threshold) / threshold <= 0.05:
                 direction = "πάνω από" if current_price >= threshold else "κάτω από"
                 alert_msg = (f"🚨 ΕΙΔΟΠΟΙΗΣΗ: Η μετοχή {stock_name} ({sym}) "
@@ -185,28 +169,21 @@ class StockMonitor:
                              f"Τρέχουσα τιμή: {current_price:.2f}€")
                 alerts.append(alert_msg)
         return alerts
-    
+
     def get_stock_summary(self, symbol=None):
-        """
-        Generate a summary of stock data.
-        If symbol is provided, returns data for that stock only.
-        Otherwise returns data for all monitored stocks.
-        """
         if symbol and symbol in self.default_stocks:
             stock_info = self.get_stock_data(symbol)
             if stock_info:
                 return self._format_stock_message(stock_info)
             return f"Δεν βρέθηκαν δεδομένα για τη μετοχή {symbol}"
-        # If no specific symbol, compile summary for all stocks
         summary = "📊 *Σύνοψη Μετοχών* 📊\n\n"
         for sym in self.default_stocks.keys():
             stock_info = self.get_stock_data(sym)
             if stock_info:
                 summary += self._format_stock_message(stock_info) + "\n\n"
         return summary.strip()
-    
+
     def _format_stock_message(self, stock_info):
-        """Format stock data as a readable message"""
         symbol = stock_info["symbol"]
         name = stock_info["name"]
         price = stock_info["price"]
@@ -214,7 +191,6 @@ class StockMonitor:
         change_percent = stock_info["change_percent"]
         currency = stock_info["currency"]
         timestamp = stock_info["timestamp"]
-        # Determine emoji based on price change
         emoji = "🔴" if change < 0 else "🟢" if change > 0 else "⚪️"
         message = f"{emoji} *{name}* ({symbol})\n"
         message += f"Τιμή: {price:.2f} {currency}\n"
@@ -222,17 +198,14 @@ class StockMonitor:
         message += f"Τελευταία ενημέρωση: {timestamp}"
         return message
 
-# Initialize stock monitor instance
+
+# Εκκίνηση του monitor
 stock_monitor = StockMonitor()
-
-# Telegram command handlers
-
+# Εντολή /start
 @bot.message_handler(commands=['start'])
 def start_command(message):
-    """Send welcome message when the command /start is issued."""
     user = message.from_user
     user_id = user.id
-    # Store user info if first time
     if user_id not in user_data:
         user_data[user_id] = {
             "first_name": user.first_name,
@@ -251,9 +224,9 @@ def start_command(message):
     )
     bot.reply_to(message, welcome_text)
 
+# Εντολή /help
 @bot.message_handler(commands=['help'])
 def help_command(message):
-    """Send a message when the command /help is issued."""
     help_text = (
         "*Διαθέσιμες Εντολές:*\n\n"
         "*Γενικές Εντολές:*\n"
@@ -280,16 +253,16 @@ def help_command(message):
     )
     bot.send_message(message.chat.id, help_text, parse_mode='Markdown')
 
+# Εντολή /getid
 @bot.message_handler(commands=['getid'])
 def getid_command(message):
-    """Send user their Telegram ID and chat ID."""
     user_id = message.from_user.id
     chat_id = message.chat.id
     bot.reply_to(message, f"Το Telegram ID σου είναι: {user_id}\nΤο Chat ID είναι: {chat_id}")
 
+# Εντολή /status
 @bot.message_handler(commands=['status'])
 def status_command(message):
-    """Send system status information."""
     uptime = get_uptime()
     status_text = (
         f"*Κατάσταση Συστήματος NOVAXA*\n\n"
@@ -301,35 +274,31 @@ def status_command(message):
         f"Τελευταία ενημέρωση: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     )
     bot.send_message(message.chat.id, status_text, parse_mode='Markdown')
-
-# Stock-related commands
-
+# Εντολή /stocks - Εμφάνιση όλων των παρακολουθούμενων μετοχών
 @bot.message_handler(commands=['stocks'])
 def stocks_command(message):
-    """Display summary of all monitored stocks."""
     bot.send_message(message.chat.id, "Λαμβάνω δεδομένα μετοχών...")
     summary = stock_monitor.get_stock_summary()
     bot.send_message(message.chat.id, summary, parse_mode='Markdown')
 
+# Εντολή /stock [σύμβολο] - Εμφάνιση μιας συγκεκριμένης μετοχής
 @bot.message_handler(commands=['stock'])
 def stock_command(message):
-    """Display information for a specific stock."""
     args = message.text.split()[1:] if len(message.text.split()) > 1 else []
     if not args:
-        bot.reply_to(message, "Παρακαλώ δώστε το σύμβολο της μετοχής. Παράδειγμα: /stock OPAP.AT")
+        bot.reply_to(message, "Παρακαλώ δώσε το σύμβολο της μετοχής. Παράδειγμα: /stock OPAP.AT")
         return
     symbol = args[0].upper()
     bot.send_message(message.chat.id, f"Λαμβάνω δεδομένα για τη μετοχή {symbol}...")
     stock_info = stock_monitor.get_stock_summary(symbol)
     bot.send_message(message.chat.id, stock_info, parse_mode='Markdown')
 
+# Εντολή /alert [σύμβολο] [τιμή] - Ορισμός ειδοποίησης τιμής
 @bot.message_handler(commands=['alert'])
 def alert_command(message):
-    """Set price alert for a stock."""
     args = message.text.split()[1:] if len(message.text.split()) > 1 else []
     if len(args) < 2:
-        bot.reply_to(message, ("Παρακαλώ δώστε το σύμβολο της μετοχής και την τιμή-στόχο. "
-                                "Παράδειγμα: /alert OPAP.AT 18.50"))
+        bot.reply_to(message, "Χρήση: /alert OPAP.AT 18.50")
         return
     symbol = args[0].upper()
     try:
@@ -337,26 +306,21 @@ def alert_command(message):
     except ValueError:
         bot.reply_to(message, "Η τιμή-στόχος πρέπει να είναι αριθμός.")
         return
-    # If stock not already monitored, attempt to fetch it and add
     if symbol not in stock_monitor.default_stocks:
         stock_info = stock_monitor.get_stock_data(symbol)
         if not stock_info:
-            bot.reply_to(message, (f"Δεν βρέθηκε η μετοχή με σύμβολο {symbol}. "
-                                   f"Βεβαιωθείτε ότι χρησιμοποιείτε το σωστό σύμβολο."))
+            bot.reply_to(message, f"Δεν βρέθηκε η μετοχή {symbol}.")
             return
         stock_monitor.add_stock(symbol, stock_info["name"])
-    # Set the alert threshold
     success = stock_monitor.set_alert_threshold(symbol, threshold)
     if success:
-        bot.reply_to(message, f"Η ειδοποίηση για τη μετοχή {symbol} ορίστηκε στα {threshold}€.")
+        bot.reply_to(message, f"Ορίστηκε ειδοποίηση για {symbol} στα {threshold}€.")
     else:
-        bot.reply_to(message, f"Σφάλμα κατά τον ορισμό της ειδοποίησης για τη μετοχή {symbol}.")
+        bot.reply_to(message, f"Απέτυχε ο ορισμός ειδοποίησης για {symbol}.")
 
-# Project-related commands
-
+# Εντολή /projects - Προβολή όλων των projects
 @bot.message_handler(commands=['projects'])
 def projects_command(message):
-    """Display summary of all projects."""
     message_text = "📋 *Κατάσταση Projects* 📋\n\n"
     for project_id, project_data in projects.items():
         status_emoji = "🟢" if project_data["status"] == "Active" else \
@@ -366,408 +330,267 @@ def projects_command(message):
         message_text += f"Τελευταία ενημέρωση: {project_data['last_update']}\n"
         message_text += f"Περιγραφή: {project_data['description']}\n"
         message_text += f"Πρόοδος: {project_data['metrics']['progress']}%\n\n"
-    # Inline keyboard for project quick selection
     markup = types.InlineKeyboardMarkup(row_width=3)
     btn_bidprice = types.InlineKeyboardButton("BidPrice", callback_data="project_bidprice")
     btn_amesis = types.InlineKeyboardButton("Amesis", callback_data="project_amesis")
     btn_6225 = types.InlineKeyboardButton("Project6225", callback_data="project_6225")
     markup.add(btn_bidprice, btn_amesis, btn_6225)
     bot.send_message(message.chat.id, message_text, reply_markup=markup, parse_mode='Markdown')
-
+# Εντολές για συγκεκριμένα projects
 @bot.message_handler(commands=['bidprice'])
 def bidprice_command(message):
-    """Display BidPrice project status."""
     send_project_status(message, "bidprice")
 
 @bot.message_handler(commands=['amesis'])
 def amesis_command(message):
-    """Display Amesis project status."""
     send_project_status(message, "amesis")
 
 @bot.message_handler(commands=['6225'])
 def project6225_command(message):
-    """Display Project6225 status."""
     send_project_status(message, "6225")
 
-def send_project_status(message, project_id):
-    """Helper function to send project status."""
-    if project_id not in projects:
-        bot.reply_to(message, f"Το project {project_id} δεν βρέθηκε.")
-        return
-    project_data = projects[project_id]
-    metrics = project_data["metrics"]
-    message_text = f"📊 *{project_data['name']}* 📊\n\n"
-    message_text += f"*Κατάσταση:* {project_data['status']}\n"
-    message_text += f"*Τελευταία ενημέρωση:* {project_data['last_update']}\n"
-    message_text += f"*Περιγραφή:* {project_data['description']}\n\n"
-    # Add project-specific metrics
-    message_text += "*Μετρήσεις:*\n"
-    if project_id == "bidprice":
-        message_text += f"• Ενεργές αγγελίες: {metrics['active_listings']}\n"
-        message_text += f"• Νέες προσφορές: {metrics['new_bids']}\n"
-    elif project_id == "amesis":
-        message_text += f"• Μηνύματα που στάλθηκαν: {metrics['messages_sent']}\n"
-        message_text += f"• Παραλήπτες: {metrics['recipients']}\n"
-    elif project_id == "6225":
-        message_text += f"• Προϊόντα: {metrics['products']}\n"
-        message_text += f"• Πωλήσεις: {metrics['sales']}\n"
-    message_text += f"• Πρόοδος: {metrics['progress']}%\n\n"
-    message_text += "*Τελευταία logs:*\n"
-    # Include last 3 log entries
-    for log in project_data['logs'][-3:]:
-        message_text += f"• {log}\n"
-    # Inline keyboard for viewing full logs or going back
-    markup = types.InlineKeyboardMarkup(row_width=1)
-    btn_logs = types.InlineKeyboardButton("Πλήρη Logs", callback_data=f"logs_{project_id}")
-    btn_back = types.InlineKeyboardButton("Επιστροφή στα Projects", callback_data="back_to_projects")
-    markup.add(btn_logs, btn_back)
-    bot.send_message(message.chat.id, message_text, reply_markup=markup, parse_mode='Markdown')
-
+# Εντολή /logs [project] - Εμφάνιση logs συγκεκριμένου project
 @bot.message_handler(commands=['logs'])
 def logs_command(message):
-    """Display logs for a specific project."""
     args = message.text.split()[1:] if len(message.text.split()) > 1 else []
     if not args:
-        bot.reply_to(message, "Παρακαλώ δώστε το όνομα του project. Παράδειγμα: /logs bidprice")
+        bot.reply_to(message, "Παρακαλώ γράψε το όνομα του project. Π.χ.: /logs bidprice")
         return
     project_id = args[0].lower()
     if project_id in projects:
         send_project_logs(message, project_id)
     else:
-        bot.reply_to(message, f"Το project {project_id} δεν βρέθηκε. Διαθέσιμα projects: bidprice, amesis, 6225")
+        bot.reply_to(message, "Δεν βρέθηκε αυτό το project. Επιλογές: bidprice, amesis, 6225")
 
-def send_project_logs(message, project_id):
-    """Helper function to send all logs of a project."""
-    project_data = projects[project_id]
-    message_text = f"📝 *Logs για {project_data['name']}* 📝\n\n"
-    # List all log entries with numbering
-    for i, log in enumerate(project_data['logs'], 1):
-        message_text += f"{i}. {log}\n"
-    # Inline keyboard for navigation
-    markup = types.InlineKeyboardMarkup(row_width=1)
-    btn_back_project = types.InlineKeyboardButton(f"Επιστροφή στο {project_data['name']}", callback_data=f"project_{project_id}")
-    btn_back_projects = types.InlineKeyboardButton("Επιστροφή στα Projects", callback_data="back_to_projects")
-    markup.add(btn_back_project, btn_back_projects)
-    bot.send_message(message.chat.id, message_text, reply_markup=markup, parse_mode='Markdown')
-
+# Εντολή /progress - Ημερήσια αναφορά προόδου όλων των projects
 @bot.message_handler(commands=['progress'])
 def progress_command(message):
-    """Display daily progress report for all projects (on-demand)."""
-    # We can reuse send_daily_report logic here, but to avoid sending to all, just reply to this user
-    # Generate the report content:
     report_text = "📈 *Καθημερινή Αναφορά Προόδου* 📈\n\n"
     report_text += f"*Ημερομηνία:* {datetime.now().strftime('%Y-%m-%d')}\n\n"
-    # Stock summary
+
     report_text += "*Μετοχές:*\n"
     for symbol, stock_data in stock_monitor.default_stocks.items():
         stock_info = stock_monitor.get_stock_data(symbol)
         if stock_info:
-            change_emoji = "🔴" if stock_info["change"] < 0 else "🟢" if stock_info["change"] > 0 else "⚪️"
-            report_text += f"{change_emoji} {stock_data['name']}: {stock_info['price']:.2f}€ ({stock_info['change']:+.2f}€)\n"
-    report_text += "\n*Projects:*\n"
-    for project_id, project_data in projects.items():
-        status_emoji = "🟢" if project_data["status"] == "Active" else \
-                       "🟡" if project_data["status"] == "In Development" else "🔵"
-        report_text += f"{status_emoji} *{project_data['name']}*\n"
-        report_text += f"  Πρόοδος: {project_data['metrics']['progress']}%\n"
-        if project_id == "bidprice":
-            report_text += f"  Ενεργές αγγελίες: {project_data['metrics']['active_listings']}\n"
-            report_text += f"  Νέες προσφορές: {project_data['metrics']['new_bids']}\n"
-        elif project_id == "amesis":
-            report_text += f"  Μηνύματα: {project_data['metrics']['messages_sent']}\n"
-            report_text += f"  Παραλήπτες: {project_data['metrics']['recipients']}\n"
-        elif project_id == "6225":
-            report_text += f"  Προϊόντα: {project_data['metrics']['products']}\n"
-            report_text += f"  Πωλήσεις: {project_data['metrics']['sales']}\n"
-        report_text += f"  Τελευταία ενέργεια: {project_data['logs'][-1]}\n\n"
-    bot.send_message(message.chat.id, report_text, parse_mode='Markdown')
+            emoji = "🔴" if stock_info["change"] < 0 else "🟢" if stock_info["change"] > 0 else "⚪️"
+            report_text += f"{emoji} {stock_data['name']}: {stock_info['price']:.2f}€ ({stock_info['change']:+.2f}€)\n"
 
+    report_text += "\n*Projects:*\n"
+    for pid, pdata in projects.items():
+        emoji = "🟢" if pdata["status"] == "Active" else \
+                "🟡" if pdata["status"] == "In Development" else "🔵"
+        report_text += f"{emoji} *{pdata['name']}*\n"
+        report_text += f"  Πρόοδος: {pdata['metrics']['progress']}%\n"
+        if pid == "bidprice":
+            report_text += f"  Αγγελίες: {pdata['metrics']['active_listings']}, Προσφορές: {pdata['metrics']['new_bids']}\n"
+        elif pid == "amesis":
+            report_text += f"  Μηνύματα: {pdata['metrics']['messages_sent']}, Παραλήπτες: {pdata['metrics']['recipients']}\n"
+        elif pid == "6225":
+            report_text += f"  Προϊόντα: {pdata['metrics']['products']}, Πωλήσεις: {pdata['metrics']['sales']}\n"
+        report_text += f"  Τελευταία ενέργεια: {pdata['logs'][-1]}\n\n"
+
+    bot.send_message(message.chat.id, report_text, parse_mode='Markdown')
+# Εντολή /broadcast [μήνυμα] - Μαζική αποστολή μηνύματος (μόνο admin)
+@bot.message_handler(commands=['broadcast'])
+def broadcast_command(message):
+    args = message.text.split()[1:]
+    if not args:
+        bot.reply_to(message, "Γράψε το μήνυμα που θέλεις να στείλεις. Παράδειγμα:\n/broadcast Καλημέρα σε όλους!")
+        return
+    broadcast_text = " ".join(args)
+    sent = 0
+    for user_id, data in user_data.items():
+        try:
+            bot.send_message(data["chat_id"], f"📢 *Ενημέρωση:*\n{broadcast_text}", parse_mode='Markdown')
+            sent += 1
+        except Exception as e:
+            logger.error(f"Broadcast error to user {user_id}: {str(e)}")
+    bot.reply_to(message, f"Το μήνυμα στάλθηκε σε {sent} χρήστες.")
+
+# Εντολή /notify [μήνυμα] - Ορισμός ειδοποίησης (placeholder λειτουργία)
+@bot.message_handler(commands=['notify'])
+def notify_command(message):
+    args = message.text.split()[1:]
+    if not args:
+        bot.reply_to(message, "Γράψε το κείμενο ειδοποίησης. Παράδειγμα:\n/notify Έλεγχος αποθεμάτων στις 14:00")
+        return
+    notification_text = " ".join(args)
+    bot.reply_to(message, f"🔔 Ειδοποίηση καταχωρήθηκε:\n{notification_text}")
+
+# Εντολή /mystats - Στατιστικά όλων των projects
+@bot.message_handler(commands=['mystats'])
+def mystats_command(message):
+    message_text = "📊 *Συγκεντρωτικά Στατιστικά Projects* 📊\n\n"
+    for pid, pdata in projects.items():
+        message_text += f"*{pdata['name']}*\n"
+        for key, value in pdata["metrics"].items():
+            message_text += f"• {key.replace('_',' ').capitalize()}: {value}\n"
+        message_text += f"• Πρόοδος: {pdata['metrics']['progress']}%\n\n"
+    bot.send_message(message.chat.id, message_text, parse_mode='Markdown')
+
+# Εντολή /trending - Προβολή τάσεων για Project6225
 @bot.message_handler(commands=['trending'])
 def trending_command(message):
-    """Display trending products for Project6225."""
-    # Example static trending data (this would come from analytics in real scenario)
-    trending_products = [
+    trending = [
         {"name": "Custom T-Shirt Design #1", "sales": 12, "growth": "+25%"},
         {"name": "Phone Case Model X", "sales": 8, "growth": "+15%"},
         {"name": "Personalized Mug", "sales": 6, "growth": "+10%"}
     ]
-    message_text = "📊 *Trending Products - Project6225* 📊\n\n"
-    for i, product in enumerate(trending_products, 1):
-        message_text += f"{i}. *{product['name']}*\n"
-        message_text += f"   Πωλήσεις: {product['sales']}\n"
-        message_text += f"   Ανάπτυξη: {product['growth']}\n\n"
-    message_text += "*Προτεινόμενες Ενέργειες:*\n"
-    message_text += "• Αύξηση διαφημιστικού προϋπολογισμού για το #1\n"
-    message_text += "• Δημιουργία παρόμοιων προϊόντων με το #2\n"
-    message_text += "• Προσφορά έκπτωσης για το #3\n"
-    bot.send_message(message.chat.id, message_text, parse_mode='Markdown')
-
-@bot.message_handler(commands=['mystats'])
-def mystats_command(message):
-    """Display aggregated statistics for all projects."""
-    message_text = "📊 *Στατιστικά Projects* 📊\n\n"
-    # BidPrice stats
-    message_text += "*BidPrice:*\n"
-    message_text += f"• Ενεργές αγγελίες: {projects['bidprice']['metrics']['active_listings']}\n"
-    message_text += f"• Νέες προσφορές: {projects['bidprice']['metrics']['new_bids']}\n"
-    message_text += f"• Ποσοστό ολοκλήρωσης: {projects['bidprice']['metrics']['progress']}%\n\n"
-    # Amesis stats
-    message_text += "*Amesis:*\n"
-    message_text += f"• Μηνύματα που στάλθηκαν: {projects['amesis']['metrics']['messages_sent']}\n"
-    message_text += f"• Παραλήπτες: {projects['amesis']['metrics']['recipients']}\n"
-    message_text += f"• Ποσοστό ολοκλήρωσης: {projects['amesis']['metrics']['progress']}%\n\n"
-    # Project6225 stats
-    message_text += "*Project6225:*\n"
-    message_text += f"• Προϊόντα: {projects['6225']['metrics']['products']}\n"
-    message_text += f"• Πωλήσεις: {projects['6225']['metrics']['sales']}\n"
-    message_text += f"• Ποσοστό ολοκλήρωσης: {projects['6225']['metrics']['progress']}%\n\n"
-    # Example overall progress (could be calculated)
-    message_text += "*Συνολική Πρόοδος:* 55%"
-    bot.send_message(message.chat.id, message_text, parse_mode='Markdown')
-
-# Notification/broadcast commands
-
-@bot.message_handler(commands=['broadcast'])
-def broadcast_command(message):
-    """Send a broadcast message to all users (admin only)."""
-    user_id = message.from_user.id
-    args = message.text.split()[1:] if len(message.text.split()) > 1 else []
-    # (In real scenario, check admin privileges here)
-    if not args:
-        bot.reply_to(message, ("Παρακαλώ δώστε το μήνυμα που θέλετε να στείλετε. "
-                               "Παράδειγμα: /broadcast Σημαντική ενημέρωση!"))
-        return
-    broadcast_text = " ".join(args)
-    # For now, just echo the message back to sender (since actual send to all might be restricted)
-    bot.reply_to(message,
-                 f"📣 *Broadcast Message*\n\n{broadcast_text}\n\n"
-                 f"Σε κανονική λειτουργία, αυτό το μήνυμα θα στελνόταν σε όλους τους χρήστες.",
-                 parse_mode='Markdown')
-
-@bot.message_handler(commands=['notify'])
-def notify_command(message):
-    """Set a notification (for future alert)."""
-    args = message.text.split()[1:] if len(message.text.split()) > 1 else []
-    if not args:
-        bot.reply_to(message, ("Παρακαλώ δώστε το μήνυμα ειδοποίησης. "
-                               "Παράδειγμα: /notify Υπενθύμιση για τη συνάντηση"))
-        return
-    notification_text = " ".join(args)
-    # In real scenario, we would schedule this notification for later; here we just confirm
-    bot.reply_to(message,
-                 f"🔔 *Ειδοποίηση Ρυθμίστηκε*\n\n"
-                 f"{notification_text}\n\n"
-                 f"Θα λάβετε αυτή την ειδοποίηση στο μέλλον.",
-                 parse_mode='Markdown')
-
-# Callback query handler for inline buttons
-
+    msg = "🔥 *Trending Προϊόντα - Project6225* 🔥\n\n"
+    for i, p in enumerate(trending, 1):
+        msg += f"{i}. *{p['name']}*\n   Πωλήσεις: {p['sales']} | Ανάπτυξη: {p['growth']}\n\n"
+    bot.send_message(message.chat.id, msg, parse_mode='Markdown')
+# Διαχείριση callback queries για inline κουμπιά
 @bot.callback_query_handler(func=lambda call: True)
-def callback_handler(call):
-    """Handle callback queries from inline keyboards."""
+def handle_callback(call):
     if call.data.startswith("project_"):
-        project_id = call.data.split("_")[1]
-        send_project_status_callback(call, project_id)
+        project_id = call.data.replace("project_", "")
+        show_project_details(call, project_id)
     elif call.data.startswith("logs_"):
-        project_id = call.data.split("_")[1]
-        send_project_logs_callback(call, project_id)
+        project_id = call.data.replace("logs_", "")
+        show_project_logs(call, project_id)
     elif call.data == "back_to_projects":
-        send_projects_callback(call)
+        show_all_projects(call)
 
-def send_project_status_callback(call, project_id):
-    """Send project status in response to inline callback (edits the message)."""
+def show_project_details(call, project_id):
     if project_id not in projects:
-        bot.answer_callback_query(call.id, text=f"Το project {project_id} δεν βρέθηκε.")
+        bot.answer_callback_query(call.id, "Project not found")
         return
-    project_data = projects[project_id]
-    metrics = project_data["metrics"]
-    message_text = f"📊 *{project_data['name']}* 📊\n\n"
-    message_text += f"*Κατάσταση:* {project_data['status']}\n"
-    message_text += f"*Τελευταία ενημέρωση:* {project_data['last_update']}\n"
-    message_text += f"*Περιγραφή:* {project_data['description']}\n\n"
-    message_text += "*Μετρήσεις:*\n"
-    if project_id == "bidprice":
-        message_text += f"• Ενεργές αγγελίες: {metrics['active_listings']}\n"
-        message_text += f"• Νέες προσφορές: {metrics['new_bids']}\n"
-    elif project_id == "amesis":
-        message_text += f"• Μηνύματα που στάλθηκαν: {metrics['messages_sent']}\n"
-        message_text += f"• Παραλήπτες: {metrics['recipients']}\n"
-    elif project_id == "6225":
-        message_text += f"• Προϊόντα: {metrics['products']}\n"
-        message_text += f"• Πωλήσεις: {metrics['sales']}\n"
-    message_text += f"• Πρόοδος: {metrics['progress']}%\n\n"
-    message_text += "*Τελευταία logs:*\n"
-    for log in project_data['logs'][-3:]:
-        message_text += f"• {log}\n"
-    # Update the existing message with project details
-    markup = types.InlineKeyboardMarkup(row_width=1)
-    btn_logs = types.InlineKeyboardButton("Πλήρη Logs", callback_data=f"logs_{project_id}")
-    btn_back = types.InlineKeyboardButton("Επιστροφή στα Projects", callback_data="back_to_projects")
-    markup.add(btn_logs, btn_back)
+    pdata = projects[project_id]
+    msg = f"📊 *{pdata['name']}* 📊\n\n"
+    msg += f"Κατάσταση: {pdata['status']}\n"
+    msg += f"Τελευταία ενημέρωση: {pdata['last_update']}\n"
+    msg += f"Περιγραφή: {pdata['description']}\n\n"
+    msg += "*Μετρήσεις:*\n"
+    for key, val in pdata["metrics"].items():
+        msg += f"• {key.replace('_',' ').capitalize()}: {val}\n"
+    msg += "\n*Τελευταία logs:*\n"
+    for log in pdata["logs"][-3:]:
+        msg += f"• {log}\n"
+    markup = types.InlineKeyboardMarkup()
+    markup.add(
+        types.InlineKeyboardButton("Πλήρη Logs", callback_data=f"logs_{project_id}"),
+        types.InlineKeyboardButton("Επιστροφή στα Projects", callback_data="back_to_projects")
+    )
     bot.edit_message_text(chat_id=call.message.chat.id,
                           message_id=call.message.message_id,
-                          text=message_text,
+                          text=msg,
                           reply_markup=markup,
                           parse_mode='Markdown')
     bot.answer_callback_query(call.id)
 
-def send_project_logs_callback(call, project_id):
-    """Send project logs in response to inline callback."""
-    project_data = projects[project_id]
-    message_text = f"📝 *Logs για {project_data['name']}* 📝\n\n"
-    for i, log in enumerate(project_data['logs'], 1):
-        message_text += f"{i}. {log}\n"
-    markup = types.InlineKeyboardMarkup(row_width=1)
-    btn_back_project = types.InlineKeyboardButton(f"Επιστροφή στο {project_data['name']}", callback_data=f"project_{project_id}")
-    btn_back_projects = types.InlineKeyboardButton("Επιστροφή στα Projects", callback_data="back_to_projects")
-    markup.add(btn_back_project, btn_back_projects)
+def show_project_logs(call, project_id):
+    if project_id not in projects:
+        bot.answer_callback_query(call.id, "Project not found")
+        return
+    logs = projects[project_id]["logs"]
+    msg = f"📝 *Logs για {projects[project_id]['name']}* 📝\n\n"
+    for i, log in enumerate(logs, 1):
+        msg += f"{i}. {log}\n"
+    markup = types.InlineKeyboardMarkup()
+    markup.add(
+        types.InlineKeyboardButton(f"Επιστροφή στο {projects[project_id]['name']}", callback_data=f"project_{project_id}"),
+        types.InlineKeyboardButton("Επιστροφή στα Projects", callback_data="back_to_projects")
+    )
     bot.edit_message_text(chat_id=call.message.chat.id,
                           message_id=call.message.message_id,
-                          text=message_text,
+                          text=msg,
                           reply_markup=markup,
                           parse_mode='Markdown')
     bot.answer_callback_query(call.id)
 
-def send_projects_callback(call):
-    """Send the projects overview again (for 'back_to_projects' action)."""
-    message_text = "📋 *Κατάσταση Projects* 📋\n\n"
-    for project_id, project_data in projects.items():
-        status_emoji = "🟢" if project_data["status"] == "Active" else \
-                       "🟡" if project_data["status"] == "In Development" else "🔵"
-        message_text += f"{status_emoji} *{project_data['name']}*\n"
-        message_text += f"Κατάσταση: {project_data['status']}\n"
-        message_text += f"Τελευταία ενημέρωση: {project_data['last_update']}\n"
-        message_text += f"Περιγραφή: {project_data['description']}\n"
-        message_text += f"Πρόοδος: {project_data['metrics']['progress']}%\n\n"
+def show_all_projects(call):
+    msg = "📋 *Κατάσταση Projects* 📋\n\n"
+    for pid, pdata in projects.items():
+        emoji = "🟢" if pdata["status"] == "Active" else "🟡" if pdata["status"] == "In Development" else "🔵"
+        msg += f"{emoji} *{pdata['name']}*\nΠρόοδος: {pdata['metrics']['progress']}%\n\n"
     markup = types.InlineKeyboardMarkup(row_width=3)
-    btn_bidprice = types.InlineKeyboardButton("BidPrice", callback_data="project_bidprice")
-    btn_amesis = types.InlineKeyboardButton("Amesis", callback_data="project_amesis")
-    btn_6225 = types.InlineKeyboardButton("Project6225", callback_data="project_6225")
-    markup.add(btn_bidprice, btn_amesis, btn_6225)
+    markup.add(
+        types.InlineKeyboardButton("BidPrice", callback_data="project_bidprice"),
+        types.InlineKeyboardButton("Amesis", callback_data="project_amesis"),
+        types.InlineKeyboardButton("Project6225", callback_data="project_6225")
+    )
     bot.edit_message_text(chat_id=call.message.chat.id,
                           message_id=call.message.message_id,
-                          text=message_text,
+                          text=msg,
                           reply_markup=markup,
                           parse_mode='Markdown')
     bot.answer_callback_query(call.id)
-
-# Helper function to get system uptime (placeholder implementation)
-def get_uptime():
-    """Get system uptime."""
-    # In real implementation, fetch system uptime. Here, we provide a static string for demonstration.
-    return "3 ημέρες, 7 ώρες, 22 λεπτά"
-
-# Scheduled task functions
+# ----------- SCHEDULER ΚΑΙ ΠΕΡΙΟΔΙΚΕΣ ΕΡΓΑΣΙΕΣ -----------
 
 def check_stock_alerts():
-    """Check for stock alerts and send notifications."""
+    """Έλεγχος μετοχών για ειδοποιήσεις."""
     alerts = stock_monitor.check_alerts()
     if alerts:
-        for alert in alerts:
-            logger.info(f"Stock alert: {alert}")
-            # Notify all users about the alert
-            for user_id, data in user_data.items():
+        for user_id, udata in user_data.items():
+            for alert in alerts:
                 try:
-                    bot.send_message(data["chat_id"], alert, parse_mode='Markdown')
+                    bot.send_message(udata["chat_id"], alert)
                 except Exception as e:
-                    logger.error(f"Error sending alert to user {user_id}: {str(e)}")
+                    logger.error(f"Αποτυχία αποστολής ειδοποίησης σε χρήστη {user_id}: {e}")
 
-def update_project_data():
-    """Update project data periodically (e.g., refresh last_update timestamps)."""
-    for project_id in projects:
-        projects[project_id]["last_update"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    logger.info("Project data updated")
+def update_project_statuses():
+    """Ανανεώνει την ημερομηνία τελευταίας ενημέρωσης στα projects."""
+    for project in projects.values():
+        project["last_update"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 def send_daily_report():
-    """Send a daily progress report to all users."""
-    logger.info("Daily report would be sent to all users")
-    for user_id, data in user_data.items():
+    """Αποστολή ημερήσιας αναφοράς σε όλους τους χρήστες."""
+    today = datetime.now().strftime("%Y-%m-%d")
+    report = f"📈 *Ημερήσια Αναφορά NOVAXA* - {today} 📈\n\n"
+    report += stock_monitor.get_stock_summary() + "\n\n"
+    for pid, pdata in projects.items():
+        report += f"🔹 *{pdata['name']}*: {pdata['metrics']['progress']}%\n"
+    for user_id, udata in user_data.items():
         try:
-            message_text = "📈 *Καθημερινή Αναφορά Προόδου* 📈\n\n"
-            message_text += f"*Ημερομηνία:* {datetime.now().strftime('%Y-%m-%d')}\n\n"
-            # Stock summary in the report
-            message_text += "*Μετοχές:*\n"
-            for symbol, stock_data in stock_monitor.default_stocks.items():
-                stock_info = stock_monitor.get_stock_data(symbol)
-                if stock_info:
-                    change_emoji = "🔴" if stock_info["change"] < 0 else "🟢" if stock_info["change"] > 0 else "⚪️"
-                    message_text += f"{change_emoji} {stock_data['name']}: {stock_info['price']:.2f}€ ({stock_info['change']:+.2f}€)\n"
-            message_text += "\n*Projects:*\n"
-            for project_id, project_data in projects.items():
-                status_emoji = "🟢" if project_data["status"] == "Active" else \
-                               "🟡" if project_data["status"] == "In Development" else "🔵"
-                message_text += f"{status_emoji} *{project_data['name']}*\n"
-                message_text += f"  Πρόοδος: {project_data['metrics']['progress']}%\n"
-                if project_id == "bidprice":
-                    message_text += f"  Ενεργές αγγελίες: {project_data['metrics']['active_listings']}\n"
-                    message_text += f"  Νέες προσφορές: {project_data['metrics']['new_bids']}\n"
-                elif project_id == "amesis":
-                    message_text += f"  Μηνύματα: {project_data['metrics']['messages_sent']}\n"
-                    message_text += f"  Παραλήπτες: {project_data['metrics']['recipients']}\n"
-                elif project_id == "6225":
-                    message_text += f"  Προϊόντα: {project_data['metrics']['products']}\n"
-                    message_text += f"  Πωλήσεις: {project_data['metrics']['sales']}\n"
-                message_text += f"  Τελευταία ενέργεια: {project_data['logs'][-1]}\n\n"
-            bot.send_message(data["chat_id"], message_text, parse_mode='Markdown')
+            bot.send_message(udata["chat_id"], report, parse_mode='Markdown')
         except Exception as e:
-            logger.error(f"Error sending daily report to user {user_id}: {str(e)}")
+            logger.error(f"Σφάλμα αποστολής αναφοράς σε {user_id}: {e}")
 
-# Background scheduler thread starter
 def run_scheduler():
-    """Run the scheduler in the background."""
-    schedule.every(15).minutes.do(check_stock_alerts)
-    schedule.every(1).hours.do(update_project_data)
+    """Τρέχει το schedule loop στο παρασκήνιο."""
+    schedule.every(10).minutes.do(check_stock_alerts)
+    schedule.every(1).hours.do(update_project_statuses)
     schedule.every().day.at("09:00").do(send_daily_report)
     while True:
-        try:
-            schedule.run_pending()
-            time.sleep(1)
-        except Exception as e:
-            logger.error(f"Error in scheduler: {str(e)}")
-            time.sleep(60)  # wait a minute on error to avoid tight loop
+        schedule.run_pending()
+        time.sleep(1)
 
-# Flask route for Telegram webhook
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    """Handle webhook requests from Telegram"""
-    if request.headers.get('content-type') == 'application/json':
-        json_string = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_string)
-        bot.process_new_updates([update])
-        return 'ok', 200
-    else:
-        return 'error', 403
+# ---------- FLASK SERVER / POLLING MODE ----------
 
-# Flask route for health-check or index
 @app.route('/')
 def index():
-    """Simple index page to confirm the bot is running"""
-    return 'NOVAXA Bot is running!'
+    return "NOVAXA bot is alive."
 
-def main():
-    """Start the bot using polling (for development use)."""
-    bot.remove_webhook()  # ensure no webhook is set
-    # Start scheduler in background
-    scheduler_thread = threading.Thread(target=run_scheduler)
-    scheduler_thread.daemon = True
-    scheduler_thread.start()
-    try:
-        logger.info("Starting bot polling...")
-        bot.polling(none_stop=True, interval=0)
-    except Exception as e:
-        logger.error(f"Error in main polling loop: {str(e)}")
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    """Επεξεργασία ενημερώσεων από Telegram (webhook mode)"""
+    if request.headers.get('content-type') == 'application/json':
+        update = telebot.types.Update.de_json(request.data.decode("utf-8"))
+        bot.process_new_updates([update])
+        return 'ok', 200
+    return 'bad request', 400
 
-if __name__ == '__main__':
-    # Choose between polling and webhook based on environment
-    if os.environ.get('WEBHOOK_URL'):
-        # Production mode: use webhook
-        webhook_url = os.environ.get('WEBHOOK_URL')
+def start_polling():
+    """Ξεκινά το bot με polling (για ανάπτυξη)"""
+    bot.remove_webhook()
+    threading.Thread(target=run_scheduler, daemon=True).start()
+    bot.polling(none_stop=True)
+
+def start_webhook():
+    """Ξεκινά το bot με webhook (για παραγωγή)"""
+    webhook_url = os.getenv("WEBHOOK_URL")
+    port = int(os.environ.get('PORT', 5000))
+    if webhook_url:
         bot.remove_webhook()
         bot.set_webhook(url=webhook_url)
-        # Start Flask web server
-        port = int(os.environ.get('PORT', 5000))
-        logger.info(f"Starting Flask app on port {port} with webhook {webhook_url}")
-        app.run(host='0.0.0.0', port=port)
+        threading.Thread(target=run_scheduler, daemon=True).start()
+        app.run(host="0.0.0.0", port=port)
     else:
-        # Development mode: start polling
-        main()
+        start_polling()
+
+# ----------- ΕΚΚΙΝΗΣΗ MAIN -----------
+
+if __name__ == '__main__':
+    logger.info("Ξεκινά το NOVAXA bot...")
+    start_webhook()
